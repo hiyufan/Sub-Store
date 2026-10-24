@@ -359,6 +359,12 @@ function createTokenItem(payload, options = {}) {
     if (expirationMode === 'datetime') {
         exp = resolveExactExpiration(options);
     } else if (expirationMode === 'count') {
+        if ($.storage) {
+            throw new RequestInvalidError(
+                'UNSUPPORTED_EDGEONE_COUNT_TOKEN',
+                'EdgeOne Blob 不支持次数限制令牌，请使用时间有效期',
+            );
+        }
         countExpiration = resolveCountExpiration(options);
     } else if (expirationMode === 'duration' && isLifetimeDuration(options)) {
         lifetimeDuration = resolveLifetimeDuration(options);
@@ -467,6 +473,8 @@ function isShareTokenUsable(item) {
     }
 
     if (item.mode === 'count') {
+        // Blob cannot atomically reserve a use across function instances.
+        if ($.storage) return false;
         const count = Number(item.count);
         const usedCount = item.usedCount == null ? 0 : Number(item.usedCount);
         return (

@@ -48,7 +48,7 @@ export function matchesBackendPath(path, backendPath, merge) {
     );
 }
 
-export default function serve() {
+export default function serve({ serverless = false } = {}) {
     let port;
     let host;
     if ($.env.isNode) {
@@ -56,7 +56,7 @@ export default function serve() {
         host = eval('process.env.SUB_STORE_BACKEND_API_HOST') || '::';
     }
     const $app = express({ substore: $, port, host });
-    if ($.env.isNode) {
+    if ($.env.isNode && !serverless) {
         const be_merge = eval('process.env.SUB_STORE_BACKEND_MERGE');
         const be_prefix = eval('process.env.SUB_STORE_BACKEND_PREFIX');
         const fe_be_path = eval('process.env.SUB_STORE_FRONTEND_BACKEND_PATH');
@@ -150,6 +150,7 @@ export default function serve() {
     registerLogRoutes($app);
     registerAgeRoutes($app);
 
+    if (serverless) return $app;
     $app.start();
 
     if ($.env.isNode) {

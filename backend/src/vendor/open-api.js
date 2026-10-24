@@ -66,9 +66,21 @@ function normalizeNodeRequestHeaders(headers) {
 }
 
 export class OpenAPI {
-    constructor(name = 'untitled', debug = false) {
+    constructor(name = 'untitled', debug = false, { storage } = {}) {
         this.name = name;
         this.debug = debug;
+        this.storage = storage;
+        if (storage) {
+            // Each cloud request owns its state, including backup restores.
+            for (const key of ['cache', 'root']) {
+                Object.defineProperty(this, key, {
+                    get: () => storage[key],
+                    set: (value) => {
+                        storage[key] = value;
+                    },
+                });
+            }
+        }
 
         this.http = HTTP();
         this.env = ENV();
@@ -89,7 +101,8 @@ export class OpenAPI {
             }
         })();
         this.initCache();
-        installConsoleLogCapture(this);
+        // A global console wrapper would retain one cloud request forever.
+        if (!storage) installConsoleLogCapture(this);
 
         const delay = (t, v) =>
             new Promise(function (resolve) {
@@ -105,6 +118,7 @@ export class OpenAPI {
     // persistence
     // initialize cache
     initCache() {
+        if (this.storage) return;
         if (isQX)
             this.cache = JSON.parse($prefs.valueForKey(this.name) || '{}');
         if (isLoon || isSurge || isEgern)
@@ -182,6 +196,8 @@ export class OpenAPI {
 
     // store cache
     persistCache() {
+        // The cloud adapter commits before releasing the HTTP response.
+        if (this.storage) return;
         const data = JSON.stringify(this.cache, null, 2);
         if (isQX) $prefs.setValueForKey(data, this.name);
         if (isLoon || isSurge || isEgern)

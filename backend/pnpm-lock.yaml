@@ -11,6 +11,12 @@ importers:
 
   .:
     dependencies:
+      undici-edgeone:
+        specifier: npm:undici@^7.30.1
+        version: undici@7.30.1
+      '@edgeone/pages-blob':
+        specifier: ^0.0.18
+        version: 0.0.18
       '@maxmind/geoip2-node':
         specifier: ^5.0.0
         version: 5.0.0
@@ -125,6 +131,14 @@ importers:
         version: 2.6.2
 
 packages:
+
+  undici@7.30.1:
+    resolution: {integrity: sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg==}
+    engines: {node: '>=20.18.1'}
+
+  '@edgeone/pages-blob@0.0.18':
+    resolution: {integrity: sha512-5fpA33ECm/kMaUW5AfvGjyFHOotbhLmngdbbm49LEH1Ktz7E3dKfxHmNp/ubv2H83kqgV0886Az1JdUzie/TkQ==}
+    engines: {node: '>=18.0.0'}
 
   '@babel/code-frame@7.29.0':
     resolution: {integrity: sha512-9NhCeYjq9+3uxgdtp20LSiJXJvN0FeCtNGpJxuMFZ1Kv3cWUNb6DOhJwUvcVCzKGR66cw4njwM6hrJLqgOwbcw==}
@@ -2725,6 +2739,10 @@ packages:
     engines: {node: '>=12'}
 
 snapshots:
+
+  undici@7.30.1: {}
+
+  '@edgeone/pages-blob@0.0.18': {}
 
   '@babel/code-frame@7.29.0':
     dependencies:
