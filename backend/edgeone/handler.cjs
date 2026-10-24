@@ -127,15 +127,22 @@ function isFrontendNavigation(req) {
 }
 
 function isSameOriginRequest(req) {
+    // Makers rewrites Host for the internal cloud-function hop. Match the
+    // public URL reconstruction used by its runtime: Eo-Pages-Host first,
+    // X-Forwarded-Proto when present, otherwise HTTPS on the platform.
+    const platformHost = req.headers['eo-pages-host'];
     const host = String(
-        req.headers['x-forwarded-host'] || req.headers.host || '',
+        platformHost ||
+            req.headers['x-forwarded-host'] ||
+            req.headers.host ||
+            '',
     )
         .split(',')[0]
         .trim();
     if (!req.headers.origin || !host) return false;
     const protocol =
-        req.headers['x-forwarded-proto']?.split(',')[0].trim() ||
-        (req.socket.encrypted ? 'https' : 'http');
+        req.headers['x-forwarded-proto']?.split(',')[0].trim().toLowerCase() ||
+        (platformHost || req.socket.encrypted ? 'https' : 'http');
     if (!['http', 'https'].includes(protocol)) return false;
     try {
         return (

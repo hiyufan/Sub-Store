@@ -407,6 +407,89 @@ test('same-origin browser writes work while cross-origin and cross-protocol requ
     assert.equal(forwarded.status, 201);
 });
 
+test('EdgeOne public host permits same-origin requests behind its internal HTTP hop', async (t) => {
+    const { base } = await server(t);
+    const headers = {
+        Host: 'localhost:9000',
+        'Eo-Pages-Host': 'sub.example.com',
+        'X-Forwarded-Host': 'internal.example.com',
+        Origin: 'https://sub.example.com',
+        'Content-Type': 'application/json',
+    };
+    const send = (path, method = 'GET', body, overrides = {}) =>
+        fetch(`${base}${prefix}${path}`, {
+            method,
+            headers: { ...headers, ...overrides },
+            body: body === undefined ? undefined : JSON.stringify(body),
+        });
+    assert.equal((await send('/api/utils/env')).status, 200);
+    assert.equal(
+        (
+            await send('/api/subs', 'OPTIONS', undefined, {
+                'Access-Control-Request-Method': 'POST',
+                'Access-Control-Request-Headers': 'content-type',
+            })
+        ).status,
+        200,
+    );
+    assert.equal(
+        (
+            await send('/api/subs', 'POST', {
+                name: 'platform-browser',
+                source: 'local',
+                content: 'x',
+            })
+        ).status,
+        201,
+    );
+    assert.equal(
+        (
+            await send(
+                '/api/sub/platform-browser',
+                'PATCH',
+                {
+                    displayName: 'Updated from EdgeOne',
+                },
+                { 'X-Forwarded-Proto': 'HTTPS, http' },
+            )
+        ).status,
+        200,
+    );
+    assert.equal(
+        (await send('/api/sub/platform-browser', 'DELETE')).status,
+        200,
+    );
+    for (const origin of [
+        'https://evil.example',
+        'http://sub.example.com',
+        'https://sub.example.com:8443',
+        'null',
+    ]) {
+        assert.equal(
+            (await send('/api/utils/env', 'GET', undefined, { Origin: origin }))
+                .status,
+            403,
+        );
+    }
+    assert.equal(
+        (
+            await send('/api/utils/env', 'GET', undefined, {
+                'X-Forwarded-Proto': 'http',
+            })
+        ).status,
+        403,
+    );
+    assert.equal(
+        (
+            await send('/api/utils/env', 'GET', undefined, {
+                Origin: 'http://sub.example.com',
+                'X-Forwarded-Proto': 'http',
+            })
+        ).status,
+        200,
+    );
+});
+
 test('missing assets and invalid secret API paths never return the SPA shell', async (t) => {
     const frontendHtml = require('../.edgeone-build/frontend-index.cjs');
     const { base, store } = await server(t, undefined, { frontendHtml });

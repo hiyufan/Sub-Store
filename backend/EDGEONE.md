@@ -30,7 +30,7 @@
 | -------------------------------- | ---- | --------------------------------------------------------------------------------------------- |
 | `EDGEONE_SUB_STORE_PATH`         | 是   | 秘密后端路径，16–128 位字母、数字、下划线或短横线，开头的 `/` 可省略。推荐 32 位随机十六进制字符。 |
 | `EDGEONE_SUB_STORE_BLOB_NAME`    | 否   | Blob namespace，默认 `sub-store`。正式环境和预览环境应使用不同名称。                          |
-| `SUB_STORE_CORS_ALLOWED_ORIGINS` | 否   | 额外跨域前端的完整 origin。同域界面自动处理，无需配置此项；跨域请求仍遵循上游白名单。         |
+| `SUB_STORE_CORS_ALLOWED_ORIGINS` | 否   | 额外跨域前端的完整 origin。同域界面自动处理，无需配置此项；跨域请求仍遵循上游白名单。填写此项会替换默认白名单，多个来源以逗号分隔。 |
 
 生成路径（本机终端运行）：
 
@@ -48,6 +48,8 @@ node -e "console.log('/' + require('node:crypto').randomBytes(16).toString('hex'
 - `EDGEONE_CONFIG_INVALID`：变量已读到，但格式无效。填写随机字符串或 `/随机字符串`，不要填写域名、完整 URL、引号或结尾斜杠，再重新部署。变量前后空白会自动去除。
 - `EDGEONE_REQUEST_FAILED`：路径校验已通过，后端处理或 Blob 访问失败；检查云函数日志和 Blob 启用状态。
 - `404`：浏览器填写的秘密路径与云端变量不一致。
+
+若出现 `403 CORS origin not allowed`：同域识别使用 EdgeOne 传入的 `Eo-Pages-Host` 和 `X-Forwarded-Proto`（平台未传协议时默认 HTTPS），可处理平台将 Host 改为内部地址的情况。请部署包含该修复的版本。旧版本的临时处理方式是在 `SUB_STORE_CORS_ALLOWED_ORIGINS` 中填写前端的完整 origin（例如 `https://example.edgeone.app`，不包含秘密路径），保存后重新部署；不要填 `*`。若还需要官方前端访问，将其 origin 一并加入，使用逗号分隔。
 
 云函数内部通过 `getStore()` 使用平台提供的凭据，无需把 EdgeOne API Token 写进源码或前端。第一次有效请求会自动创建 namespace；控制台无需预建。保持 namespace 名称不变，重新部署会继续使用原数据。
 
