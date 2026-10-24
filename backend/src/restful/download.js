@@ -17,6 +17,7 @@ import {
 } from '@/restful/age-output';
 import { findShareToken } from '@/restful/token';
 import { maskAgeSecretInUrl } from '@/utils/age';
+import { formatMihomoDownload } from './mihomo-download';
 
 function getMihomoExternalOptions(query) {
     const useMihomoExternal = query.target === 'SurgeMac';
@@ -438,7 +439,11 @@ async function downloadSubscription(req, res) {
             }
             const body = await applyResponseTransformers({
                 res,
-                body: output,
+                body: formatMihomoDownload(output, {
+                    platform,
+                    profile: req.query.profile,
+                    produceType,
+                }),
                 process: sub.process,
                 targetPlatform: platform,
                 source: { [sub.name]: sub },
@@ -780,7 +785,11 @@ async function downloadCollection(req, res) {
             }
             const body = await applyResponseTransformers({
                 res,
-                body: output,
+                body: formatMihomoDownload(output, {
+                    platform,
+                    profile: req.query.profile,
+                    produceType,
+                }),
                 process: collection.process,
                 targetPlatform: platform,
                 source: { _collection: collection },

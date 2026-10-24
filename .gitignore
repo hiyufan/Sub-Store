@@ -134,6 +134,10 @@ out
 backend/dist/*
 !backend/dist/.gitkeep
 backend/sub-store.min.js
+backend/.edgeone-build/
+backend/.edgeone/
+backend/edgeone-public/*
+!backend/edgeone-public/.gitkeep
 
 CHANGELOG.md
 

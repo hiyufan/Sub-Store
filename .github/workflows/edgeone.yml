@@ -1,0 +1,38 @@
+name: EdgeOne adapter
+
+on:
+  push:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/edgeone.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/edgeone.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '22']
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - run: npm install --global pnpm@11.0.9
+      - run: pnpm install --frozen-lockfile
+        working-directory: backend
+      - run: pnpm run build:edgeone
+        working-directory: backend
+      # pnpm 11 requires Node 22, but the built app must also run on Node 20.
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+      - run: node --test edgeone/blob-journal.test.cjs edgeone/handler.test.cjs edgeone/frontend.test.cjs
+        working-directory: backend

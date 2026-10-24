@@ -13,6 +13,8 @@
     "dev:run": "nodemon -w sub-store.min.js sub-store.min.js",
     "esbuild:dev": "node esbuild-dev.js",
     "bundle:esbuild": "node bundle-esbuild.js",
+    "build:edgeone": "node build-edgeone.cjs",
+    "test:edgeone": "pnpm run build:edgeone && node --test edgeone/blob-journal.test.cjs edgeone/handler.test.cjs edgeone/frontend.test.cjs",
     "changelog": "conventional-changelog -p cli -i CHANGELOG.md -s"
   },
   "author": "Peng-YM",
@@ -23,6 +25,7 @@
     }
   },
   "dependencies": {
+    "@edgeone/pages-blob": "^0.0.18",
     "@maxmind/geoip2-node": "^5.0.0",
     "age-encryption": "^0.3.0",
     "body-parser": "^1.19.0",
@@ -47,6 +50,7 @@
     "semver": "^7.6.3",
     "shoutrrr-ts": "https://github.com/Delusions6515/shoutrrr-ts/releases/download/v0.2.0/shoutrrr-ts-0.2.0.tgz",
     "undici": "^8.12.3",
+    "undici-edgeone": "npm:undici@^7.30.1",
     "yaml": "^2.9.0"
   },
   "devDependencies": {
@@ -58,6 +62,7 @@
     "chai": "^4.3.6",
     "esbuild": "^0.19.8",
     "eslint": "^8.16.0",
+    "fflate": "0.8.2",
     "mocha": "^11.7.5",
     "nodemon": "^2.0.16",
     "peggy": "^2.0.1",
