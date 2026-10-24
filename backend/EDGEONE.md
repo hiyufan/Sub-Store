@@ -72,17 +72,29 @@ Vue 页面路径（如 `/subs`、`/settings/api`、`/edit/subs/名称`）可直�
 
 在订阅或组合订阅中选择 **Clash Meta**，下载和分享接口默认生成可直接导入 Clash Verge Rev 的完整 YAML，不再需要另建文件。新建的订阅也使用相同逻辑；没有指定目标但客户端 User-Agent 被识别为 Clash Meta 时同样生效。
 
-完整配置包含节点、本机混合代理端口 `7890`、国内外分流和广告拦截。策略组默认如下，可在客户端切换：
+完整配置包含节点、本机混合代理端口 `7890`、服务分流、DNS 分流、自动测速、故障切换和广告拦截。策略组默认如下，可在客户端切换；选择会保存在客户端本地：
 
 | 策略组 | 默认处理 |
 | --- | --- |
-| 节点选择 | 手动选择订阅节点 |
+| 节点选择 | 默认自动测速，也可选故障切换或固定节点 |
+| 自动测速 | 每 300 秒检测可用节点，优先低延迟节点；50 ms 容差减少频繁切换 |
+| 故障切换 | 按订阅节点顺序选择第一个可用节点，节点失效时切换 |
+| AI 服务 | 默认节点选择，可单独固定适合 AI 服务的节点 |
+| Telegram | 默认节点选择，包含域名与 Telegram IP 规则 |
+| YouTube / Netflix | 各自独立分组，默认节点选择，也可固定流媒体节点 |
+| 微软服务 / 苹果服务 | 各自独立分组，默认 DIRECT，也可切换节点 |
 | 国内流量 | DIRECT 直连，也可切换为节点选择 |
 | 国外流量 | 经过节点选择，也可切换为 DIRECT |
 | 广告拦截 | REJECT 拦截，也可切换为 DIRECT |
 | 漏网之鱼 | 未命中其他规则的流量经过节点选择 |
 
-本机和私有网段优先直连，然后匹配广告域名、国内域名、国外域名、中国 IP，最后使用兜底策略。使用 [MetaCubeX/meta-rules-dat](https://github.com/MetaCubeX/meta-rules-dat) 提供的 MRS 规则集（`category-ads-all`、`cn`、`geolocation-!cn` 和 GeoIP CN），由客户端经所选节点从 jsDelivr 下载并缓存，每 86400 秒更新。首次导入需要能通过节点下载规则；规则文件不存入 EdgeOne Blob。广告拦截基于域名，无法消除所有同域名或视频内嵌广告，误拦截时可先把广告策略切换为 DIRECT。
+规则依次匹配本机/私有网段、广告、各项服务、国内域名、国外域名、中国 IP，最后使用兜底策略。服务规则先于国内外通用规则。使用 [MetaCubeX/meta-rules-dat](https://github.com/MetaCubeX/meta-rules-dat) 提供的 11 份 MRS 规则集，由客户端经所选节点从 jsDelivr 下载并缓存，每 86400 秒更新。首次导入需要能通过节点下载规则；规则文件不存入 EdgeOne Blob。
+
+广告仍仅使用原有 `category-ads-all` 域名规则，不额外叠加激进列表、不在 DNS 层强制封锁，切换广告策略为 DIRECT 即可停用。无法消除所有同域名或视频内嵌广告。自动测速和故障切换只检测连通性/延迟，不保证节点能解锁 AI 或流媒体；需要特定地区时，可在相应服务组中固定节点。只有一个节点时仍会生成这些组，但没有其他节点可供切换。
+
+DNS 默认启用 `redir-host`，监听 `127.0.0.1:1053`，仅返回 IPv4 解析结果。国内域名与 DIRECT 出口使用阿里/腾讯加密 DNS，其他域名使用经“节点选择”发送的 Cloudflare/Google DoH；LAN 域名交给系统解析。代理节点域名用独立直连 DNS，测速域名也独立直连解析，防止节点失效后无法进行健康检查。DNS 上游用显式 `#DIRECT` 或 `#策略组` 指定出站，不依赖尚未下载的路由规则，因此 `respect-rules` 保持关闭。此配置只影响进入 Mihomo 的 DNS 与流量，不会修改系统 DNS。
+
+参考 [Mihomo 官方配置示例](https://github.com/MetaCubeX/mihomo/blob/Meta/docs/config.yaml)、[DNS 文档](https://wiki.metacubex.one/config/dns/)、[自动测速](https://wiki.metacubex.one/config/proxy-groups/url-test/)和[故障切换](https://wiki.metacubex.one/config/proxy-groups/fallback/)。
 
 不自动启用 TUN，也不配置系统代理。Clash Verge Rev 自身的端口、覆写设置和全局模式仍可能覆盖配置；请使用规则模式让分流生效。需要无远程规则依赖的基础配置，可给链接添加 `&profile=basic`：只保留本机/内网直连和其余流量走节点。
 
