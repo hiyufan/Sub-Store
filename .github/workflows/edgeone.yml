@@ -34,5 +34,5 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node }}
-      - run: node --test edgeone/blob-journal.test.cjs edgeone/handler.test.cjs
+      - run: node --test edgeone/blob-journal.test.cjs edgeone/handler.test.cjs edgeone/frontend.test.cjs
         working-directory: backend

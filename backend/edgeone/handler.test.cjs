@@ -296,3 +296,82 @@ test('cloud mode rejects count-limited tokens and retains time-based tokens', as
         200,
     );
 });
+
+test('homepage and Vue deep links return the full SPA without exposing a secret or touching Blob', async (t) => {
+    const frontendHtml = require('../.edgeone-build/frontend-index.cjs');
+    const { base, store } = await server(t, undefined, {
+        frontendHtml,
+        env: {},
+    });
+    for (const pathname of [
+        '/',
+        '/subs',
+        '/my',
+        '/settings/api',
+        '/edit/subs/example',
+    ]) {
+        const response = await fetch(`${base}${pathname}`, {
+            headers: { Accept: 'text/html' },
+        });
+        assert.equal(response.status, 200);
+        assert.match(response.headers.get('content-type'), /text\/html/);
+        assert.equal(await response.text(), frontendHtml);
+    }
+    assert.equal(store.values.size, 0);
+    assert.equal(frontendHtml.includes(prefix), false);
+    const api = await fetch(`${base}/api/utils/env`, {
+        headers: { Accept: 'text/html' },
+    });
+    assert.equal(api.status, 503);
+    assert.match(api.headers.get('content-type'), /application\/json/);
+});
+
+test('same-origin browser writes work while cross-origin and cross-protocol requests stay blocked', async (t) => {
+    const { base } = await server(t);
+    const send = (origin) =>
+        fetch(`${base}${prefix}/api/subs`, {
+            method: 'POST',
+            headers: { Origin: origin, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: 'browser',
+                source: 'local',
+                content: 'x',
+            }),
+        });
+    assert.equal((await send('https://evil.example')).status, 403);
+    assert.equal((await send(base.replace('http:', 'https:'))).status, 403);
+    assert.equal((await send(base)).status, 201);
+    const forwarded = await fetch(`${base}${prefix}/api/subs`, {
+        method: 'POST',
+        headers: {
+            Origin: 'https://sub.example.com',
+            'X-Forwarded-Host': 'sub.example.com',
+            'X-Forwarded-Proto': 'https',
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            name: 'forwarded',
+            source: 'local',
+            content: 'x',
+        }),
+    });
+    assert.equal(forwarded.status, 201);
+});
+
+test('missing assets and invalid secret API paths never return the SPA shell', async (t) => {
+    const frontendHtml = require('../.edgeone-build/frontend-index.cjs');
+    const { base, store } = await server(t, undefined, { frontendHtml });
+    for (const pathname of [
+        '/missing.js',
+        '/chunks/missing.css',
+        '/wrong/api/subs',
+        '/download/not-authorized',
+    ]) {
+        const response = await fetch(`${base}${pathname}`, {
+            headers: { Accept: 'text/html' },
+        });
+        assert.equal(response.status, 404);
+        assert.notEqual(await response.text(), frontendHtml);
+    }
+    assert.equal(store.values.size, 0);
+});

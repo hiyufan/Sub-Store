@@ -1,6 +1,6 @@
-# 在 EdgeOne Makers 部署 Sub-Store 后端
+# 在同一个 EdgeOne Makers 项目部署 Sub-Store 前后端
 
-本适配使用 **Node 云函数 + EdgeOne Blob**。KV 当前仅支持 Edge Functions；Blob 有 Node SDK，并支持强一致读取。
+本适配使用 **官方前端静态文件 + Node 云函数 + EdgeOne Blob**。打开根域名就是完整 Sub-Store 界面，首次输入秘密路径连接后端。KV 当前仅支持 Edge Functions；Blob 有 Node SDK，并支持强一致读取。
 
 -   Blob 文档：https://pages.edgeone.ai/document/blob-storage
 -   KV 文档：https://pages.edgeone.ai/document/kv-storage
@@ -20,13 +20,17 @@
 
 `backend/edgeone.json` 已包含安装、构建、输出目录和构建用 Node 版本设置。不要继续使用 `bundle:esbuild`、`dist` 或 `build` 作为本部署的配置。
 
+构建时自动下载官方前端 **2.34.1** 发布包，校验固定 SHA-256，然后输出到 `edgeone-public`。版本、下载地址、校验值与对应源码地址保存在 `backend/edgeone/frontend-release.json`。构建需要能够访问 GitHub Releases；下载或校验失败会中止，不会发布说明页替代完整界面。无需另建前端项目，也不需要前端源码的第二次依赖安装。
+
+前端默认 API 改为当前域名，首次连接使用官方前端已有的“后端连接配置”弹窗；不会把 `EDGEONE_SUB_STORE_PATH` 编译进 JS 或 HTML。修改后的文件同步更新 PWA 预缓存版本，原发布包的压缩副本不会混入部署。前端 GPL-3.0 许可证和源码说明随静态文件提供。
+
 在 EdgeOne 项目启用 Blob 存储，在环境变量中设置：
 
 | 环境变量                         | 必需 | 含义                                                                                          |
 | -------------------------------- | ---- | --------------------------------------------------------------------------------------------- |
 | `EDGEONE_SUB_STORE_PATH`         | 是   | 秘密后端路径，格式为 `/` 加 16–128 位字母、数字、下划线或短横线。推荐 32 位随机十六进制字符。 |
 | `EDGEONE_SUB_STORE_BLOB_NAME`    | 否   | Blob namespace，默认 `sub-store`。正式环境和预览环境应使用不同名称。                          |
-| `SUB_STORE_CORS_ALLOWED_ORIGINS` | 否   | 沿用上游配置；默认允许官方前端。自建前端需填其完整 origin。                                   |
+| `SUB_STORE_CORS_ALLOWED_ORIGINS` | 否   | 额外跨域前端的完整 origin。同域界面自动处理，无需配置此项；跨域请求仍遵循上游白名单。         |
 
 生成路径（本机终端运行）：
 
@@ -34,7 +38,7 @@
 node -e "console.log('/' + require('node:crypto').randomBytes(16).toString('hex'))"
 ```
 
-不要把秘密路径提交进仓库。它授予完整后端访问权限，分享时也需保护。未配置时返回 503，路径不匹配时返回 404，不会访问 Blob。
+不要把秘密路径提交进仓库。它授予完整后端访问权限，分享时也需保护。未配置时后端 API 返回 503，路径不匹配时返回 404，不会访问 Blob；公开前端页面仍可打开。
 
 云函数内部通过 `getStore()` 使用平台提供的凭据，无需把 EdgeOne API Token 写进源码或前端。第一次有效请求会自动创建 namespace；控制台无需预建。保持 namespace 名称不变，重新部署会继续使用原数据。
 
@@ -45,11 +49,13 @@ node -e "console.log('/' + require('node:crypto').randomBytes(16).toString('hex'
 假设域名是 `https://example.edgeone.app`、秘密路径是 `/你的随机字符串`：
 
 1. 访问 `https://example.edgeone.app/你的随机字符串/api/utils/env`，应该返回 JSON，`status` 为 `success`。
-2. 打开 https://sub-store.vercel.app/ ，将后端地址设置为 `https://example.edgeone.app/你的随机字符串`。
+2. 打开 `https://example.edgeone.app/`，在“后端连接配置”弹窗中输入 `/你的随机字符串`，点击“连接”。浏览器会保存这个配置，以后直接打开域名即可使用。更换浏览器或设备需要重新输入。
 3. 从原 Sub-Store 导出备份，在新后端通过前端的数据恢复功能导入。该适配不会自动读取你其他服务器上的 JSON 文件。
 4. 新建测试订阅，刷新，再重新部署一次，确认订阅仍然存在。也可在 Blob 控制台看到 `transactions/` 下的对象。
 
-根域名的静态页面只是后端说明，不包含完整前端 UI。未访问秘密路径时的 404 不表示部署失败。
+也可以在首次访问时使用 `https://example.edgeone.app/?magicpath=你的随机字符串` 一键配置，但这个地址包含后端访问权限，应按密码保管。建议直接在弹窗输入路径，避免把秘密留在 URL 中。
+
+Vue 页面路径（如 `/subs`、`/settings/api`、`/edit/subs/名称`）可直接打开和刷新。EdgeOne 优先提供静态资源，云函数为页面导航返回同一份 SPA HTML；API、下载和分享接口不会被当作前端页面返回。首页公开展示界面不会授予后端数据访问权限。
 
 ## 保存方式和并发语义
 
@@ -86,4 +92,4 @@ pnpm run test:edgeone
 pnpm --package=edgeone dlx edgeone makers build
 ```
 
-测试使用内存模拟 Blob，涵盖真实 Sub-Store 应用的增删改查、跨实例加载、并发新增、备份恢复、写入失败和秘密路径；无需云凭据。只有实际部署后的检查才能验证你的账户权限和线上 Blob 服务。
+测试使用内存模拟 Blob，涵盖真实 Sub-Store 应用的增删改查、跨实例加载、并发新增、备份恢复、写入失败、秘密路径、前端发布包校验、页面导航和同域 CORS；无需云凭据。浏览器验证流程为：打开首页 → 输入秘密路径 → 创建本地订阅 → 保存 → 刷新确认数据 → 刷新编辑和设置页，并检查桌面/手机布局。只有实际部署后的检查才能验证你的账户权限和线上 Blob 服务。

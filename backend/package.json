@@ -14,7 +14,7 @@
     "esbuild:dev": "node esbuild-dev.js",
     "bundle:esbuild": "node bundle-esbuild.js",
     "build:edgeone": "node build-edgeone.cjs",
-    "test:edgeone": "pnpm run build:edgeone && node --test edgeone/blob-journal.test.cjs edgeone/handler.test.cjs",
+    "test:edgeone": "pnpm run build:edgeone && node --test edgeone/blob-journal.test.cjs edgeone/handler.test.cjs edgeone/frontend.test.cjs",
     "changelog": "conventional-changelog -p cli -i CHANGELOG.md -s"
   },
   "author": "Peng-YM",
@@ -62,6 +62,7 @@
     "chai": "^4.3.6",
     "esbuild": "^0.19.8",
     "eslint": "^8.16.0",
+    "fflate": "0.8.2",
     "mocha": "^11.7.5",
     "nodemon": "^2.0.16",
     "peggy": "^2.0.1",

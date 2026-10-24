@@ -1,6 +1,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { build } = require('esbuild');
+const { buildFrontend } = require('./edgeone/frontend.cjs');
 
 async function main() {
     const result = await build({
@@ -69,6 +70,7 @@ async function main() {
     // No VM, runtime eval, global singleton cache, or local data file is required.
     const factory = `module.exports = function(__edgeoneState) {\nconst module = { exports: {} };\nconst exports = module.exports;\n${result.outputFiles[0].text}\nreturn module.exports.default();\n};\n`;
     await fs.writeFile(path.join(directory, 'application.cjs'), factory);
+    await buildFrontend();
     console.log(
         'EdgeOne application built; static output: edgeone-public, functions: cloud-functions',
     );

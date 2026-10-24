@@ -110,11 +110,60 @@ function dispatch(application, req, res, commit) {
     });
 }
 
-function createHandler({ createApplication, storeFactory, env = process.env }) {
+function isFrontendNavigation(req) {
+    if (!['GET', 'HEAD'].includes(req.method)) return false;
+    const pathname = req.url.split('?')[0];
+    if (pathname === '/') return true;
+    if (!req.headers.accept?.includes('text/html')) return false;
+    if (
+        pathname === '/settings/api' ||
+        /^\/edit\/(subs|collections|files|sync|shares)\//.test(pathname)
+    )
+        return true;
+    if (/(?:^|\/)(api|download|share)(?:\/|$)/.test(pathname)) return false;
+    return !/\.(?:m?js|css|map|json|webmanifest|png|jpe?g|svg|ico|woff2?|ttf|gz|br)$/i.test(
+        pathname,
+    );
+}
+
+function isSameOriginRequest(req) {
+    const host = String(
+        req.headers['x-forwarded-host'] || req.headers.host || '',
+    )
+        .split(',')[0]
+        .trim();
+    if (!req.headers.origin || !host) return false;
+    const protocol =
+        req.headers['x-forwarded-proto']?.split(',')[0].trim() ||
+        (req.socket.encrypted ? 'https' : 'http');
+    if (!['http', 'https'].includes(protocol)) return false;
+    try {
+        return (
+            new URL(req.headers.origin).origin ===
+            new URL(`${protocol}://${host}`).origin
+        );
+    } catch {
+        return false;
+    }
+}
+
+function createHandler({
+    createApplication,
+    storeFactory,
+    frontendHtml,
+    env = process.env,
+}) {
     const app = express();
     app.disable('x-powered-by');
     let journal;
     app.use(async (req, res) => {
+        // Static files have platform precedence. The catch-all cloud route also
+        // serves the SPA shell for direct navigation and refreshes of Vue routes.
+        if (frontendHtml && isFrontendNavigation(req)) {
+            res.setHeader('Cache-Control', 'no-store');
+            res.type('html').send(frontendHtml);
+            return;
+        }
         // A secret path works with the existing frontend and subscription clients.
         // It is deliberately outside SUB_STORE_*: /api/utils/env exposes those.
         const prefix = env.EDGEONE_SUB_STORE_PATH;
@@ -138,6 +187,9 @@ function createHandler({ createApplication, storeFactory, env = process.env }) {
             journal ||= new BlobJournal(storeFactory());
             const transaction = await journal.load();
             const application = createApplication(transaction.state);
+            // Browser same-origin requests need no CORS grant. Continue applying
+            // the upstream allowlist to all cross-origin requests.
+            if (isSameOriginRequest(req)) delete req.headers.origin;
             await dispatch(application, req, res, () =>
                 journal.commit(transaction),
             );
