@@ -346,6 +346,167 @@ test('cloud mode rejects count-limited tokens and retains time-based tokens', as
     );
 });
 
+test('Clash Meta downloads generate complete profiles for existing and newly added subscriptions', async (t) => {
+    const { request, base, store } = await server(t);
+    const content =
+        'vless://11111111-1111-4111-8111-111111111111@reality.example:443?security=reality&sni=example.com&fp=chrome&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&sid=0123456789abcdef&type=tcp&flow=xtls-rprx-vision#' +
+        encodeURIComponent('节点选择');
+    assert.equal(
+        (
+            await request('/api/subs', 'POST', {
+                name: 'reality',
+                source: 'local',
+                content,
+            })
+        ).status,
+        201,
+    );
+    const download = async (path, headers) => {
+        const response = await fetch(`${base}${prefix}${path}`, { headers });
+        assert.equal(response.status, 200);
+        return YAML.parse(await response.text());
+    };
+    for (const target of [
+        'ClashMeta',
+        'meta',
+        'clashmeta',
+        'clash.meta',
+        'Clash.Meta',
+        'mihomo',
+        'Mihomo',
+    ]) {
+        const config = await download(`/download/reality?target=${target}`);
+        assert.equal(config.proxies.length, 1);
+        assert.equal(config.proxies[0].type, 'vless');
+        assert.equal(
+            config.proxies[0]['reality-opts']['short-id'],
+            '0123456789abcdef',
+        );
+        assert.equal(config['mixed-port'], 7890);
+        assert.equal(config['allow-lan'], false);
+        const group = config['proxy-groups'][0];
+        assert.notEqual(group.name, config.proxies[0].name);
+        assert.deepEqual(
+            group.proxies,
+            config.proxies.map((p) => p.name),
+        );
+        assert.equal(config.rules.at(-1), `MATCH,${group.name}`);
+    }
+    const restarted = await server(t, store);
+    assert.equal(
+        (
+            await restarted.request('/api/subs', 'POST', {
+                name: 'added-later',
+                source: 'local',
+                content:
+                    'ss://YWVzLTEyOC1nY206cGFzcw==@example.com:8388#new-node',
+            })
+        ).status,
+        201,
+    );
+    const added = await download('/download/added-later', {
+        'User-Agent': 'clash-verge/v2.4.0',
+    });
+    assert.equal(added.proxies.length, 1);
+    assert.deepEqual(added['proxy-groups'][0].proxies, ['new-node']);
+    assert.equal(
+        (
+            await request('/api/collections', 'POST', {
+                name: 'combined',
+                subscriptions: ['reality', 'added-later'],
+            })
+        ).status,
+        201,
+    );
+    const collection = await download(
+        '/download/collection/combined/ClashMeta',
+    );
+    assert.equal(collection.proxies.length, 2);
+    assert.equal(collection['proxy-groups'][0].proxies.length, 2);
+    const share = await download('/share/sub/reality/ClashMeta');
+    assert.equal(share['proxy-groups'].length, 1);
+    const sharedCollection = await download('/share/col/combined/ClashMeta');
+    assert.equal(sharedCollection.proxies.length, 2);
+    assert.equal(sharedCollection['proxy-groups'].length, 1);
+    assert.deepEqual((await request('/api/files')).body.data, []);
+});
+
+test('provider exports, raw/internal formats, other targets, and file composition retain node output', async (t) => {
+    const { request, base } = await server(t);
+    assert.equal(
+        (
+            await request('/api/subs', 'POST', {
+                name: 'nodes',
+                source: 'local',
+                content: 'ss://YWVzLTEyOC1nY206cGFzcw==@example.com:8388#test',
+            })
+        ).status,
+        201,
+    );
+    for (const query of ['target=ClashMeta&profile=nodes', 'target=Clash']) {
+        const response = await fetch(
+            `${base}${prefix}/download/nodes?${query}`,
+        );
+        assert.equal(response.status, 200);
+        const config = YAML.parse(await response.text());
+        assert.deepEqual(Object.keys(config), ['proxies']);
+        assert.equal(config.proxies.length, 1);
+    }
+    for (const type of ['raw', 'internal']) {
+        const result = await request(
+            `/download/nodes?target=ClashMeta&produceType=${type}`,
+        );
+        assert.equal(result.status, 200);
+        assert.equal(Array.isArray(result.body), true);
+    }
+    assert.equal(
+        (
+            await request('/api/files', 'POST', {
+                name: 'provider',
+                type: 'mihomoConfig',
+                sourceType: 'subscription',
+                sourceName: 'nodes',
+            })
+        ).status,
+        201,
+    );
+    const file = await fetch(`${base}${prefix}/api/file/provider`);
+    assert.equal(file.status, 200);
+    assert.deepEqual(Object.keys(YAML.parse(await file.text())), ['proxies']);
+});
+
+test('complete profiles reject empty fallback output and duplicate node names with an actionable error', async (t) => {
+    const { request } = await server(t);
+    const content = 'ss://YWVzLTEyOC1nY206cGFzcw==@example.com:8388#same';
+    assert.equal(
+        (
+            await request('/api/subs', 'POST', {
+                name: 'duplicates',
+                source: 'local',
+                content: `${content}\n${content}`,
+            })
+        ).status,
+        201,
+    );
+    const duplicate = await request('/download/duplicates?target=ClashMeta');
+    assert.equal(duplicate.status, 500);
+    assert.match(duplicate.body.error.details, /重命名重复节点/);
+    assert.equal(
+        (
+            await request('/api/subs', 'POST', {
+                name: 'unsupported',
+                source: 'local',
+                content: 'not-a-subscription',
+                ignoreFailedRemoteSub: 'fallbackQuiet',
+            })
+        ).status,
+        201,
+    );
+    const empty = await request('/download/unsupported?target=ClashMeta');
+    assert.equal(empty.status, 500);
+    assert.match(empty.body.error.details, /没有可用节点/);
+});
+
 test('homepage and Vue deep links return the full SPA without exposing a secret or touching Blob', async (t) => {
     const frontendHtml = require('../.edgeone-build/frontend-index.cjs');
     const { base, store } = await server(t, undefined, {

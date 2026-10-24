@@ -68,6 +68,14 @@ node -e "console.log('/' + require('node:crypto').randomBytes(16).toString('hex'
 
 Vue 页面路径（如 `/subs`、`/settings/api`、`/edit/subs/名称`）可直接打开和刷新。EdgeOne 优先提供静态资源，云函数为页面导航返回同一份 SPA HTML；API、下载和分享接口不会被当作前端页面返回。首页公开展示界面不会授予后端数据访问权限。
 
+## Clash Meta / Mihomo 导出
+
+在订阅或组合订阅中选择 **Clash Meta**，下载和分享接口默认生成可直接导入 Clash Verge Rev 的完整 YAML，不再需要另建文件。新建的订阅也使用相同逻辑；没有指定目标但客户端 User-Agent 被识别为 Clash Meta 时同样生效。
+
+完整配置包含节点、手动选择代理组、基础规则和本机混合代理端口 `7890`。本机与私有网段直连，其余流量经过所选节点；不自动启用 TUN、不配置系统代理，也不下载 GeoIP/GeoSite。Clash Verge Rev 自身的端口和覆写设置仍可能覆盖配置值。
+
+需要给 `proxy-providers` 使用的纯节点 YAML 时，在导出链接后添加 `&profile=nodes`（若原地址没有查询参数则使用 `?profile=nodes`）。内部节点生产、文件拼装、`produceType=raw/internal` 和其他客户端格式保持原样。所有节点都被过滤或节点名重复时，完整配置导出会返回明确错误，避免生成无法导入的配置。响应转换器仍在完整配置生成后运行，加密在最后进行。
+
 ## 保存方式和并发语义
 
 -   每次请求使用独立应用和缓存，先强一致读取 Blob，再处理请求。
