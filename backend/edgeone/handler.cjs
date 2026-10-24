@@ -166,13 +166,27 @@ function createHandler({
         }
         // A secret path works with the existing frontend and subscription clients.
         // It is deliberately outside SUB_STORE_*: /api/utils/env exposes those.
-        const prefix = env.EDGEONE_SUB_STORE_PATH;
-        if (!/^\/[A-Za-z0-9_-]{16,128}$/.test(prefix || '')) {
+        const configuredPath = String(env.EDGEONE_SUB_STORE_PATH || '').trim();
+        if (!configuredPath) {
             sendError(
                 res,
                 503,
                 'EDGEONE_CONFIG_REQUIRED',
-                '请设置 EDGEONE_SUB_STORE_PATH：斜杠加至少16位随机字符',
+                '当前部署未读取到 EDGEONE_SUB_STORE_PATH，请在 EdgeOne 项目环境变量中设置秘密路径，并重新部署使其生效',
+            );
+            return;
+        }
+        // The console accepts a secret token or a path. Normalize only its
+        // optional leading slash and surrounding whitespace; never weaken it.
+        const prefix = configuredPath.startsWith('/')
+            ? configuredPath
+            : `/${configuredPath}`;
+        if (!/^\/[A-Za-z0-9_-]{16,128}$/.test(prefix)) {
+            sendError(
+                res,
+                503,
+                'EDGEONE_CONFIG_INVALID',
+                'EDGEONE_SUB_STORE_PATH 格式错误：请填写 16–128 位字母、数字、下划线或短横线，开头的 / 可省略；修改后请重新部署',
             );
             return;
         }

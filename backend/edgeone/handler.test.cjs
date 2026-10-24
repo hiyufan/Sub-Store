@@ -181,6 +181,55 @@ test('secret path is required and unmatched requests do not touch storage', asyn
     );
 });
 
+test('console secret accepts an optional leading slash and surrounding whitespace', async (t) => {
+    for (const value of [
+        prefix.slice(1),
+        `  ${prefix}\n`,
+        ` ${prefix.slice(1)} `,
+    ]) {
+        const { request, base } = await server(t, undefined, {
+            env: { EDGEONE_SUB_STORE_PATH: value },
+        });
+        assert.equal((await request('/api/utils/env')).status, 200);
+        assert.equal((await fetch(`${base}/api/utils/env`)).status, 404);
+        assert.equal(
+            (await fetch(`${base}${prefix}extra/api/utils/env`)).status,
+            404,
+        );
+    }
+});
+
+test('configuration errors distinguish missing and invalid secrets without storage access or secret disclosure', async (t) => {
+    for (const value of [
+        undefined,
+        '',
+        '   ',
+        'short',
+        `${prefix}/`,
+        `/${prefix}`,
+        'https://example.com/secret',
+        'a'.repeat(129),
+    ]) {
+        const { request } = await server(t, undefined, {
+            env: { EDGEONE_SUB_STORE_PATH: value },
+            storeFactory() {
+                assert.fail('Invalid configuration must not access Blob');
+            },
+        });
+        const response = await request('/api/utils/env');
+        assert.equal(response.status, 503);
+        assert.equal(response.headers.get('cache-control'), 'no-store');
+        assert.equal(
+            response.body.error.code,
+            value?.trim()
+                ? 'EDGEONE_CONFIG_INVALID'
+                : 'EDGEONE_CONFIG_REQUIRED',
+        );
+        assert.match(response.body.error.message, /重新部署/);
+        assert.equal(JSON.stringify(response.body).includes(prefix), false);
+    }
+});
+
 test('invalid JSON does not commit state; CORS preflight and environment response work', async (t) => {
     const { base, store, request } = await server(t);
     const bad = await fetch(`${base}${prefix}/api/subs`, {
