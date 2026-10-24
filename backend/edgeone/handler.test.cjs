@@ -390,7 +390,33 @@ test('Clash Meta downloads generate complete profiles for existing and newly add
             group.proxies,
             config.proxies.map((p) => p.name),
         );
-        assert.equal(config.rules.at(-1), `MATCH,${group.name}`);
+        const groups = config['proxy-groups'];
+        assert.equal(groups.length, 5);
+        assert.equal(config.rules.at(-1), `MATCH,${groups[4].name}`);
+        assert.deepEqual(groups[1].proxies, ['DIRECT', group.name]);
+        assert.deepEqual(groups[2].proxies, [group.name, 'DIRECT']);
+        assert.deepEqual(groups[3].proxies, ['REJECT', 'DIRECT']);
+        assert.ok(
+            config.rules.indexOf(`RULE-SET,ads,${groups[3].name}`) <
+                config.rules.indexOf(`RULE-SET,cn-domain,${groups[1].name}`),
+        );
+        const providers = config['rule-providers'];
+        assert.deepEqual(Object.keys(providers), [
+            'ads',
+            'cn-domain',
+            'non-cn-domain',
+            'cn-ip',
+        ]);
+        for (const provider of Object.values(providers)) {
+            assert.equal(provider.type, 'http');
+            assert.equal(provider.format, 'mrs');
+            assert.equal(provider.interval, 86400);
+            assert.equal(provider.proxy, group.name);
+            assert.equal(
+                provider.behavior,
+                provider === providers['cn-ip'] ? 'ipcidr' : 'domain',
+            );
+        }
     }
     const restarted = await server(t, store);
     assert.equal(
@@ -424,11 +450,63 @@ test('Clash Meta downloads generate complete profiles for existing and newly add
     assert.equal(collection.proxies.length, 2);
     assert.equal(collection['proxy-groups'][0].proxies.length, 2);
     const share = await download('/share/sub/reality/ClashMeta');
-    assert.equal(share['proxy-groups'].length, 1);
+    assert.equal(share['proxy-groups'].length, 5);
     const sharedCollection = await download('/share/col/combined/ClashMeta');
     assert.equal(sharedCollection.proxies.length, 2);
-    assert.equal(sharedCollection['proxy-groups'].length, 1);
+    assert.equal(sharedCollection['proxy-groups'].length, 5);
     assert.deepEqual((await request('/api/files')).body.data, []);
+});
+
+test('routing groups and provider references avoid every colliding node name', async (t) => {
+    const { request, base } = await server(t);
+    const names = [
+        '节点选择',
+        '国内流量',
+        '国外流量',
+        '广告拦截',
+        '漏网之鱼',
+        '广告拦截 (2)',
+    ];
+    assert.equal(
+        (
+            await request('/api/subs', 'POST', {
+                name: 'collisions',
+                source: 'local',
+                content: names
+                    .map(
+                        (name) =>
+                            `ss://YWVzLTEyOC1nY206cGFzcw==@example.com:8388#${encodeURIComponent(
+                                name,
+                            )}`,
+                    )
+                    .join('\n'),
+            })
+        ).status,
+        201,
+    );
+    const response = await fetch(
+        `${base}${prefix}/download/collisions?target=ClashMeta`,
+    );
+    assert.equal(response.status, 200);
+    const config = YAML.parse(await response.text());
+    const groups = config['proxy-groups'];
+    assert.equal(groups.length, 5);
+    const references = new Set([
+        ...names,
+        ...groups.map((g) => g.name),
+        'DIRECT',
+        'REJECT',
+    ]);
+    for (const group of groups) {
+        assert.equal(names.includes(group.name), false);
+        assert.ok(group.proxies.every((name) => references.has(name)));
+    }
+    for (const provider of Object.values(config['rule-providers']))
+        assert.equal(provider.proxy, groups[0].name);
+    for (const rule of config.rules.filter((r) => /^(RULE-SET|MATCH),/.test(r)))
+        assert.ok(
+            groups.some((group) => group.name === rule.split(',').at(-1)),
+        );
 });
 
 test('provider exports, raw/internal formats, other targets, and file composition retain node output', async (t) => {
@@ -459,6 +537,13 @@ test('provider exports, raw/internal formats, other targets, and file compositio
         assert.equal(result.status, 200);
         assert.equal(Array.isArray(result.body), true);
     }
+    const basic = await fetch(
+        `${base}${prefix}/download/nodes?target=ClashMeta&profile=basic`,
+    );
+    const basicConfig = YAML.parse(await basic.text());
+    assert.equal(basic.status, 200);
+    assert.equal(basicConfig['proxy-groups'].length, 1);
+    assert.equal(basicConfig['rule-providers'], undefined);
     assert.equal(
         (
             await request('/api/files', 'POST', {
